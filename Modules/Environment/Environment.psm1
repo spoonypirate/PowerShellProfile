@@ -595,3 +595,46 @@ function Set-Prompt {
        }
     }
 }
+
+function fuck {
+    $fuck = $(thefuck (get-history -count 1).commandline)
+    if($fuck.startswith("echo")) {
+        $fuck.substring(5)
+    }
+    else { iex "$fuck" }
+}
+function cpanel {Start-Process "explorer.exe" -ArgumentList "shell:::{ED7BA470-8E54-465E-825C-99712043E01C}" }
+function get-java {
+    param(
+        [switch]$download
+    )
+    if ($download) {
+        $page = iwr http://java.com/en/download/windows_offline.jsp
+        $version = $page.RawContent -split "`n" | ? {$_ -match 'recommend'} | select -f 1 | % {$_ -replace '^[^v]+| \(.*$'}
+        $link = $page.links.href | ? {$_ -match '^http.*download'} | select -f 1
+        iwr $link -outfile "c:\tools\Java $version.exe"
+    } else {
+        ($(iwr http://java.com/en/download).Content.Split("`n") | ? {$_ -match 'version'})[0]
+    }
+}
+if (!(Get-Module -ListAvailable | Where-Object {$_.Name -eq "Connect-Mstsc"})) {
+    Write-Output 'Connect-Mstsc module not found.'
+    Write-Output "'rdp' function will not work. Please make sure the module is present."
+    } else {
+    function rdp {
+        Param([Parameter(Mandatory=$true)] $servername)
+        switch ($servername)    {
+            127.0.0.1 { write-output "no no no!" }
+            localhost { Write-Output "NO"}
+            default {
+                $user = "$env:userdomain\$env:username"
+                $securestringpath = "C:\tools\pwd.txt"
+                $pass = Get-Content $securestringpath | ConvertTo-SecureString
+                $cred = New-Object System.Management.Automation.PSCredential $user,$pass
+                Connect-Mstsc $servername $user $cred.GetNetworkCredential().password
+                }
+            }
+        }
+    }
+
+    
