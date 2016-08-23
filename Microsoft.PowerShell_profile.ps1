@@ -33,12 +33,13 @@ catch {
 
 ##  If your PC doesn't have this set already, someone could tamper with this script...
 #   but at least now, they can't tamper with any of the modules/scripts that I auto-load!
-Set-ExecutionPolicy AllSigned Process
 
-if ((Get-ExecutionPolicy -list | Where {$_.Scope -eq 'LocalMachine'}).ExecutionPolicy -ne 'AllSigned') {
+
+if ((Get-ExecutionPolicy -list | Where-Object {$_.Scope -eq 'LocalMachine'}).ExecutionPolicy -ne 'AllSigned') {
     Write-Warning 'Execution policy was set to AllSigned for this process but is not set to AllSigned for the LocalMachine. '
     Write-Warning 'What this means is that this profile could be tampered with and you might never know!'
     pause
+    try { Set-ExecutionPolicy AllSigned Process } catch {write-error ''}
 }
 
 ##  Ok, now import environment so we have PSProcessElevated, Trace-Message, and other custom functions we use later
@@ -83,7 +84,7 @@ Set-Variable ProfileDir (Split-Path $MyInvocation.MyCommand.Path -Parent) -Scope
 
 ##  Add additional items to your path. Modify this to suit your needs. 
 #   We do need the Scripts directory for the rest of this profile script to run though so this first one is essential to add.
-[string[]]$folders = Get-ChildItem $ProfileDir\Script[s] -Directory | % FullName
+[string[]]$folders = Get-ChildItem $ProfileDir\Script[s] -Directory | ForEach-Object FullName
 
 ## Developer tools things ...
 # $folders += [System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()
@@ -97,7 +98,7 @@ Set-Variable ProfileDir (Split-Path $MyInvocation.MyCommand.Path -Parent) -Scope
 #Trace-Message "Development aliases set"
 if ($SHIFTED) {
     Trace-Message "Path before updates: "
-    $($ENV:Path -split ';') | Foreach {
+    $($ENV:Path -split ';') | ForEach-Object {
         Trace-Message " -- $($_)"
     }
 }
@@ -106,7 +107,7 @@ $ENV:PATH = Select-UniquePath $folders ${Env:Path}
 
 if ($SHIFTED) {
     Trace-Message "Path AFTER updates: "
-    $($ENV:Path -split ';') | Foreach {
+    $($ENV:Path -split ';') | ForEach-Object {
         Trace-Message " -- $($_)"
     }
 }
@@ -127,7 +128,7 @@ if($ProfileDir -ne (Get-Location)) {
 }
 
 ##  Add some psdrives if you want them
-New-PSDrive Documents FileSystem (Get-SpecialFolder MyDocuments -Value)
+#New-PSDrive Documents FileSystem (Get-SpecialFolder MyDocuments -Value)
 
 # I no longer worry about OneDrive, because I mapped my Documents into it, so there's only OneDrive
 <#if( ($OneDrive = (Get-ItemProperty HKCU:\Software\Microsoft\OneDrive UserFolder -EA 0).UserFolder) -OR
@@ -174,7 +175,20 @@ if($Host.Name -eq "ConsoleHost" -and !$NOCONSOLE) {
 
         Set-PSReadlineOption -EmphasisForegroundColor White -EmphasisBackgroundColor $BackgroundColor `
                              -ContinuationPromptForegroundColor DarkBlue -ContinuationPromptBackgroundColor $BackgroundColor -ContinuationPrompt (([char]183) + "  ")
-        Set-PSReadlineKeyHandler -Key '"',"'" `
+
+    }
+    
+    if (Get-Module PSReadLine) {
+        Set-PSReadLineMyWay
+        Set-PSReadlineKeyHandler -Key "Ctrl+Shift+R" -Function ForwardSearchHistory
+        Set-PSReadlineKeyHandler -Key "Ctrl+R" -Function ReverseSearchHistory
+
+        Set-PSReadlineKeyHandler Ctrl+M SetMark
+        Set-PSReadlineKeyHandler Ctrl+Shift+M ExchangePointAndMark
+
+        Set-PSReadlineKeyHandler Ctrl+K KillLine
+        Set-PSReadlineKeyHandler Ctrl+I Yank
+                Set-PSReadlineKeyHandler -Key '"',"'" `
                              -BriefDescription SmartInsertQuote `
                              -LongDescription "Insert paired quotes if not already on a quote" `
                              -ScriptBlock {
@@ -191,195 +205,187 @@ if($Host.Name -eq "ConsoleHost" -and !$NOCONSOLE) {
             [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($cursor - 1)
             }
         }
-    Set-PSReadlineKeyHandler -Key '(','{','[' `
-                             -BriefDescription InsertPairedBraces `
-                             -LongDescription "Insert matching braces" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $closeChar = switch ($key.KeyChar) {
-            <#case#> '(' { [char]')'; break }
-            <#case#> '{' { [char]'}'; break }
-            <#case#> '[' { [char]']'; break }
-            }
-        [Microsoft.PowerShell.PSConsoleReadLine]::Insert("$($key.KeyChar)$closeChar")
-        $line = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-        [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($cursor - 1)
-        }
-    Set-PSReadlineKeyHandler -Key ')',']','}' `
-                             -BriefDescription SmartCloseBraces `
-                             -LongDescription "Insert closing brace or skip" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $line = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-        if ($line[$cursor] -eq $key.KeyChar) {
-            [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($cursor + 1)
-            }
-        else {
-            [Microsoft.PowerShell.PSConsoleReadLine]::Insert("$($key.KeyChar)")
-            }
-        }
-    Set-PSReadlineKeyHandler -Key Backspace `
-                             -BriefDescription SmartBackspace `
-                             -LongDescription "Delete previous character or matching quotes/parens/braces" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $line = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-        if ($cursor -gt 0) {
-            $toMatch = $null
-            switch ($line[$cursor]) {
-                <#case#> '"' { $toMatch = '"'; break }
-                <#case#> "'" { $toMatch = "'"; break }
-                <#case#> ')' { $toMatch = '('; break }
-                <#case#> ']' { $toMatch = '['; break }
-                <#case#> '}' { $toMatch = '{'; break }
+        Set-PSReadlineKeyHandler -Key '(','{','[' `
+                                -BriefDescription InsertPairedBraces `
+                                -LongDescription "Insert matching braces" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $closeChar = switch ($key.KeyChar) {
+                <#case#> '(' { [char]')'; break }
+                <#case#> '{' { [char]'}'; break }
+                <#case#> '[' { [char]']'; break }
                 }
-            if ($toMatch -ne $null -and $line[$cursor-1] -eq $toMatch) {
-                [Microsoft.PowerShell.PSConsoleReadLine]::Delete($cursor - 1, 2)
+            [Microsoft.PowerShell.PSConsoleReadLine]::Insert("$($key.KeyChar)$closeChar")
+            $line = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+            [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($cursor - 1)
+            }
+        Set-PSReadlineKeyHandler -Key ')',']','}' `
+                                -BriefDescription SmartCloseBraces `
+                                -LongDescription "Insert closing brace or skip" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $line = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+            if ($line[$cursor] -eq $key.KeyChar) {
+                [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($cursor + 1)
                 }
             else {
-                [Microsoft.PowerShell.PSConsoleReadLine]::BackwardDeleteChar($key, $arg)
+                [Microsoft.PowerShell.PSConsoleReadLine]::Insert("$($key.KeyChar)")
                 }
             }
-        }
-    # Insert text from the clipboard as a here string
-    Set-PSReadlineKeyHandler -Key Ctrl+Shift+v `
-                             -BriefDescription PasteAsHereString `
-                             -LongDescription "Paste the clipboard text as a here string" `
-                             -ScriptBlock {
-        param($key, $arg)
-        Add-Type -Assembly PresentationCore
-        if ([System.Windows.Clipboard]::ContainsText()) {
-            # Get clipboard text - remove trailing spaces, convert \r\n to \n, and remove the final \n.
-            $text = ([System.Windows.Clipboard]::GetText() -replace "\p{Zs}*`r?`n","`n").TrimEnd()
-            [Microsoft.PowerShell.PSConsoleReadLine]::Insert("@'`n$text`n'@")
+        Set-PSReadlineKeyHandler -Key Backspace `
+                                -BriefDescription SmartBackspace `
+                                -LongDescription "Delete previous character or matching quotes/parens/braces" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $line = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+            if ($cursor -gt 0) {
+                $toMatch = $null
+                switch ($line[$cursor]) {
+                    <#case#> '"' { $toMatch = '"'; break }
+                    <#case#> "'" { $toMatch = "'"; break }
+                    <#case#> ')' { $toMatch = '('; break }
+                    <#case#> ']' { $toMatch = '['; break }
+                    <#case#> '}' { $toMatch = '{'; break }
+                    }
+                if ($toMatch -ne $null -and $line[$cursor-1] -eq $toMatch) {
+                    [Microsoft.PowerShell.PSConsoleReadLine]::Delete($cursor - 1, 2)
+                    }
+                else {
+                    [Microsoft.PowerShell.PSConsoleReadLine]::BackwardDeleteChar($key, $arg)
+                    }
+                }
             }
-        else {
-            [Microsoft.PowerShell.PSConsoleReadLine]::Ding()
+        # Insert text from the clipboard as a here string
+        Set-PSReadlineKeyHandler -Key Ctrl+Shift+v `
+                                -BriefDescription PasteAsHereString `
+                                -LongDescription "Paste the clipboard text as a here string" `
+                                -ScriptBlock {
+            param($key, $arg)
+            Add-Type -Assembly PresentationCore
+            if ([System.Windows.Clipboard]::ContainsText()) {
+                # Get clipboard text - remove trailing spaces, convert \r\n to \n, and remove the final \n.
+                $text = ([System.Windows.Clipboard]::GetText() -replace "\p{Zs}*`r?`n","`n").TrimEnd()
+                [Microsoft.PowerShell.PSConsoleReadLine]::Insert("@'`n$text`n'@")
+                }
+            else {
+                [Microsoft.PowerShell.PSConsoleReadLine]::Ding()
+                }
             }
-        }
-    Set-PSReadlineKeyHandler -Key 'Alt+(' `
-                             -BriefDescription ParenthesizeSelection `
-                             -LongDescription "Put parenthesis around the selection or entire line and move the cursor to after the closing parenthesis" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $selectionStart = $null
-        $selectionLength = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetSelectionState([ref]$selectionStart, [ref]$selectionLength)
-        $line = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-        if ($selectionStart -ne -1) {
-            [Microsoft.PowerShell.PSConsoleReadLine]::Replace($selectionStart, $selectionLength, '(' + $line.SubString($selectionStart, $selectionLength) + ')')
-            [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($selectionStart + $selectionLength + 2)
+        Set-PSReadlineKeyHandler -Key 'Alt+(' `
+                                -BriefDescription ParenthesizeSelection `
+                                -LongDescription "Put parenthesis around the selection or entire line and move the cursor to after the closing parenthesis" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $selectionStart = $null
+            $selectionLength = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetSelectionState([ref]$selectionStart, [ref]$selectionLength)
+            $line = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+            if ($selectionStart -ne -1) {
+                [Microsoft.PowerShell.PSConsoleReadLine]::Replace($selectionStart, $selectionLength, '(' + $line.SubString($selectionStart, $selectionLength) + ')')
+                [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($selectionStart + $selectionLength + 2)
+                }
+            else {
+                [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $line.Length, '(' + $line + ')')
+                [Microsoft.PowerShell.PSConsoleReadLine]::EndOfLine()
+                }
             }
-        else {
-            [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $line.Length, '(' + $line + ')')
-            [Microsoft.PowerShell.PSConsoleReadLine]::EndOfLine()
-            }
-        }
 
-    Set-PSReadlineKeyHandler -Key 'Alt+"' `
-                             -BriefDescription ParenthesizeSelection `
-                             -LongDescription "Put quotes around the selection or entire line and move the cursor to after the closing parenthesis" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $selectionStart = $null
-        $selectionLength = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetSelectionState([ref]$selectionStart, [ref]$selectionLength)
-        $line = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-        if ($selectionStart -ne -1) {
-            [Microsoft.PowerShell.PSConsoleReadLine]::Replace($selectionStart, $selectionLength, '"' + $line.SubString($selectionStart, $selectionLength) + '"')
-            [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($selectionStart + $selectionLength + 2)
+        Set-PSReadlineKeyHandler -Key 'Alt+"' `
+                                -BriefDescription ParenthesizeSelection `
+                                -LongDescription "Put quotes around the selection or entire line and move the cursor to after the closing parenthesis" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $selectionStart = $null
+            $selectionLength = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetSelectionState([ref]$selectionStart, [ref]$selectionLength)
+            $line = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+            if ($selectionStart -ne -1) {
+                [Microsoft.PowerShell.PSConsoleReadLine]::Replace($selectionStart, $selectionLength, '"' + $line.SubString($selectionStart, $selectionLength) + '"')
+                [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($selectionStart + $selectionLength + 2)
+                }
+            else {
+                [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $line.Length, '"' + $line + '"')
+                [Microsoft.PowerShell.PSConsoleReadLine]::EndOfLine()
+                }
             }
-        else {
-            [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $line.Length, '"' + $line + '"')
-            [Microsoft.PowerShell.PSConsoleReadLine]::EndOfLine()
-            }
-        }
-    Set-PSReadlineKeyHandler -Key "Alt+%" `
-                             -BriefDescription ExpandAliases `
-                             -LongDescription "Replace all aliases with the full command" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $ast = $null
-        $tokens = $null
-        $errors = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$ast, [ref]$tokens, [ref]$errors, [ref]$cursor)
-        $startAdjustment = 0
-        foreach ($token in $tokens) {
-            if ($token.TokenFlags -band [System.Management.Automation.Language.TokenFlags]::CommandName) {
-                $alias = $ExecutionContext.InvokeCommand.GetCommand($token.Extent.Text, 'Alias')
-                if ($alias -ne $null) {
-                    $resolvedCommand = $alias.ResolvedCommandName
-                    if ($resolvedCommand -ne $null) {
-                        $extent = $token.Extent
-                        $length = $extent.EndOffset - $extent.StartOffset
-                        [Microsoft.PowerShell.PSConsoleReadLine]::Replace(
-                            $extent.StartOffset + $startAdjustment,
-                            $length,
-                            $resolvedCommand)
-                        # Our copy of the tokens won't have been updated, so we need to
-                        # adjust by the difference in length
-                        $startAdjustment += ($resolvedCommand.Length - $length)
+        Set-PSReadlineKeyHandler -Key "Alt+%" `
+                                -BriefDescription ExpandAliases `
+                                -LongDescription "Replace all aliases with the full command" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $ast = $null
+            $tokens = $null
+            $errors = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$ast, [ref]$tokens, [ref]$errors, [ref]$cursor)
+            $startAdjustment = 0
+            foreach ($token in $tokens) {
+                if ($token.TokenFlags -band [System.Management.Automation.Language.TokenFlags]::CommandName) {
+                    $alias = $ExecutionContext.InvokeCommand.GetCommand($token.Extent.Text, 'Alias')
+                    if ($alias -ne $null) {
+                        $resolvedCommand = $alias.ResolvedCommandName
+                        if ($resolvedCommand -ne $null) {
+                            $extent = $token.Extent
+                            $length = $extent.EndOffset - $extent.StartOffset
+                            [Microsoft.PowerShell.PSConsoleReadLine]::Replace(
+                                $extent.StartOffset + $startAdjustment,
+                                $length,
+                                $resolvedCommand)
+                            # Our copy of the tokens won't have been updated, so we need to
+                            # adjust by the difference in length
+                            $startAdjustment += ($resolvedCommand.Length - $length)
+                            }
                         }
                     }
                 }
             }
-        }
-    # F1 for help on the command line - naturally
-    Set-PSReadlineKeyHandler -Key F1 `
-                             -BriefDescription CommandHelp `
-                             -LongDescription "Open the help window for the current command" `
-                             -ScriptBlock {
-        param($key, $arg)
-        $ast = $null
-        $tokens = $null
-        $errors = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$ast, [ref]$tokens, [ref]$errors, [ref]$cursor)
-        $commandAst = $ast.FindAll( {
-            $node = $args[0]
-            $node -is [System.Management.Automation.Language.CommandAst] -and
-                $node.Extent.StartOffset -le $cursor -and
-                $node.Extent.EndOffset -ge $cursor
-            }, $true) | Select-Object -Last 1
-        if ($commandAst -ne $null) {
-            $commandName = $commandAst.GetCommandName()
-            if ($commandName -ne $null) {
-                $command = $ExecutionContext.InvokeCommand.GetCommand($commandName, 'All')
-                if ($command -is [System.Management.Automation.AliasInfo]) {
-                    $commandName = $command.ResolvedCommandName
-                    }
+        # F1 for help on the command line - naturally
+        Set-PSReadlineKeyHandler -Key F1 `
+                                -BriefDescription CommandHelp `
+                                -LongDescription "Open the help window for the current command" `
+                                -ScriptBlock {
+            param($key, $arg)
+            $ast = $null
+            $tokens = $null
+            $errors = $null
+            $cursor = $null
+            [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$ast, [ref]$tokens, [ref]$errors, [ref]$cursor)
+            $commandAst = $ast.FindAll( {
+                $node = $args[0]
+                $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.Extent.StartOffset -le $cursor -and
+                    $node.Extent.EndOffset -ge $cursor
+                }, $true) | Select-Object -Last 1
+            if ($commandAst -ne $null) {
+                $commandName = $commandAst.GetCommandName()
                 if ($commandName -ne $null) {
-                    Get-Help $commandName -ShowWindow
+                    $command = $ExecutionContext.InvokeCommand.GetCommand($commandName, 'All')
+                    if ($command -is [System.Management.Automation.AliasInfo]) {
+                        $commandName = $command.ResolvedCommandName
+                        }
+                    if ($commandName -ne $null) {
+                        Get-Help $commandName -ShowWindow
+                        }
                     }
                 }
-    }
-    if (Get-Module PSReadLine) {
-        Set-PSReadLineMyWay
-        Set-PSReadlineKeyHandler -Key "Ctrl+Shift+R" -Function ForwardSearchHistory
-        Set-PSReadlineKeyHandler -Key "Ctrl+R" -Function ReverseSearchHistory
-
-        Set-PSReadlineKeyHandler Ctrl+M SetMark
-        Set-PSReadlineKeyHandler Ctrl+Shift+M ExchangePointAndMark
-
-        Set-PSReadlineKeyHandler Ctrl+K KillLine
-        Set-PSReadlineKeyHandler Ctrl+I Yank
+            }
         Trace-Message "PSReadLine fixed"
-    }
-}
+        }
+    
 else {
     Remove-Module PSReadLine -ErrorAction SilentlyContinue
     Trace-Message "PSReadLine skipped!"
+    }
 }
 
 
@@ -414,7 +420,7 @@ $ExecutionContext.SessionState.InvokeCommand.CommandNotFoundAction = {
     }
 }
 
-function prompt {
+function global:prompt {
     Set-StrictMode -Off
     $history = Get-History
     $nextHistoryId = $history.Count + 1
@@ -444,11 +450,11 @@ function prompt {
     $chunks = $path -split '\\'
     $short = $false
     if ($Pwd.Path.Length -gt 30 -and $chunks.Length -gt 2) {
-        $chunks = $chunks | select -Last 2
+        $chunks = $chunks | Select-Object -Last 2
         $short = $true
         }
-    if ($short) {    Write-Host "...\" -ForegroundColor DarkGray -NoNewline    }
-    $chunks | % { $i = 0 } {
+    if ($short) { Write-Host "...\" -ForegroundColor DarkGray -NoNewline }
+    $chunks | ForEach-Object { $i = 0 } {
         $i++
         $color = "Yellow"
         if ($_ -like "~home") { $color = "Green" }
@@ -461,7 +467,7 @@ function prompt {
     $g = Get-GitStatus
     if ($g) {
         Write-Host " [" -ForegroundColor DarkGray -NoNewline
-        $branch = $g.Branch.Split("...") | select -first 1
+        $branch = $g.Branch.Split("...") | Select-Object -first 1
         Write-Host $branch -ForegroundColor Red -NoNewline
         $add = $g.Working.Added.Count
         $cha = $g.Working.Modified.Count
@@ -494,7 +500,7 @@ function prompt {
             }
         Write-Host "]" -ForegroundColor DarkGray -NoNewline
         }
-    Write-Host "`n>" -ForegroundColor DarkGray -NoNewline
+    Write-Host "`nλ" -NoNewLine -ForegroundColor "DarkGray"
     return " "
 }
 
@@ -504,7 +510,7 @@ if (-not $SHIFTED) {
 }
 Write-SessionBanner
 Write-Host
-try {Get-Quote} catch {}
+try {Get-Quote} catch {write-error ''}
 
  
 ##  Clean up variables created in this profile that we don't wan't littering a cleanly started profile.

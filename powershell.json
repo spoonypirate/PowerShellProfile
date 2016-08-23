@@ -1,0 +1,126 @@
+{
+/*
+	 // Place your snippets for PowerShell here. Each snippet is defined under a snippet name and has a prefix, body and 
+	 // description. The prefix is what is used to trigger the snippet and the body will be expanded and inserted. Possible variables are:
+	 // $1, $2 for tab stops, ${id} and ${id:label} and ${1:label} for variables. Variables with the same id are connected.
+	 // Example:
+	 "Print to console": {
+		"prefix": "log",
+		"body": [
+			"console.log('$1');",
+			"$2"
+		],
+		"description": "Log output to console"
+	}
+*/
+"New cmdlet": {
+	"prefix": "cmdlet",
+	"body": [
+		"<#",
+		".Synopsis",
+		"Short description",
+		".DESCRIPTION",
+		"Long description",
+		".EXAMPLE",
+		"Example of how to use this cmdlet",
+		".EXAMPLE",
+		"Another example of how to use this cmdlet",
+		"#>",
+		"function ${Verb-Noun} {",
+		"	[CmdletBinding()]",
+		"	[Alias()]",
+		"	[OutputType([int])]",
+		"	Param (",
+		"		# ${param1:Param1} help description",
+		"		[Parameter(Mandatory=$true,",
+		"				ValueFromPipelineByPropertyName=$true,",
+		"				Position=0)]",
+		"		$${param1},",
+		"",
+		"		# ${param2:Param2} help description",
+		"		[int]",
+		"		$${param2}",
+		"		)",
+		"",
+		"	Begin {",
+		"${ prep here }",
+		"		}",
+		"	Process {",
+		"${do stuff}",
+		"		}",
+		"	End {",
+		"${clean up}",
+		"		}",
+		"	}",
+		],
+	"description": "Creates a new cmdlet"	
+		}
+"XAML WPF Form": {
+	"prefix": "xaml",
+	"body": [
+		"$inputXML = @\"",
+		"${XAML HERE}",
+		"\"@",
+		"$inputXML = $inputXML -replace 'x:N','N'  -replace '^<Win.*', '<Window'",
+		"",
+		
+		"[void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')",
+		"[xml]$XAML = $inputXML",
+		"#Read XAML",
+		"",
+		"$reader=(New-Object System.Xml.XmlNodeReader $xaml)", 
+		"try{$Form=[Windows.Markup.XamlReader]::Load( $reader )}",
+		"catch{Write-Host 'Unable to load Windows.Markup.XamlReader. Double-check syntax and ensure .net is installed.'}",
+		"",
+		"#===========================================================================",
+		"# Load XAML Objects In PowerShell",
+		"#===========================================================================",
+		"$xaml.SelectNodes(\"//*[@Name]\") | %{Set-Variable -Name \"WPF$($_.Name)\" -Value $Form.FindName($_.Name)}",
+		"",
+		"Function Get-FormVariables{",
+		"	if ($global:ReadmeDisplay -ne $true){Write-host 'If you need to reference this display again, run Get-FormVariables' -ForegroundColor Yellow;$global:ReadmeDisplay=$true}",
+		"	write-host 'Found the following interactable elements from our form' -ForegroundColor Cyan",
+		"	get-variable WPF*",
+		"	} #end Get-FormVariables",
+		"",
+		"Get-FormVariables",
+		"",
+		"#===========================================================================",
+		"# Actually make the objects work",
+		"#===========================================================================",
+		"${#Code to do here}",
+		"#Execute functions on mouse click",
+		"$WPFbutton_ok.Add_Click({ ",
+		"${#execute functions here}",
+		"	}) #end add_click",
+		"",
+		"#Execute functions on Enter key",
+		"$Form.Add_KeyDown({if ($args[1].key -eq 'Return'){",
+		"${#execute functions on enter press}",	
+		"		}}) #end add_keydown ",
+		"",
+		"#===========================================================================",
+		"# Shows the form",
+		"#===========================================================================",
+		"#write-host 'To show the form, run the following' -ForegroundColor Cyan",
+		"$Form.TopMost = $True",
+		"$Form.ShowDialog() | out-null ",
+		],
+	"description": "creates an xaml gui"
+	}
+
+    	"pester test": {
+            "prefix": "pestertest",
+            "body": [
+                "Describe 'Set-EnvironmentVariable' {",
+                "    Context 'Adds Path' {",
+                "        It 'sets a variable' {",
+                "            Set-EnvironmentVariable -name \"newenv\" -Value \"C:\somedir\"",
+                "            (Compare-Object -ReferenceObject $env:newenv -DifferenceObject "C:\somedir").InputObject | Should beNullOrEmpty",
+                "        }",
+                "    }",
+                "}",
+            ],
+            "description": "Framework for a new pester test"
+        }
+}

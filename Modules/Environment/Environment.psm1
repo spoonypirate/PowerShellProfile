@@ -84,7 +84,7 @@ function Set-EnvironmentVariable {
         [String]$Name,
 
         [Parameter(Position=1)]
-        [String]$Value,
+        [Array]$Value,
 
         [System.EnvironmentVariableTarget]
         $Scope="Machine",
@@ -96,6 +96,7 @@ function Set-EnvironmentVariable {
     $Success = $False
     do {
         try {
+            
             [System.Environment]::SetEnvironmentVariable($Name, $Value, $Scope)
             Write-Verbose "Set $Scope environment variable $Name = $Value"
             $Success = $True
@@ -138,17 +139,17 @@ function Add-Path {
     )
 
     # Make the new thing as an array so we don't get duplicates
-    $Path = @($Prepend -split "$Separator" | %{ $_.TrimEnd("\/") } | ?{ $_ })
-    $Path += $OldPath = @([Environment]::GetEnvironmentVariable($Name, $Scope) -split "$Separator" | %{ $_.TrimEnd("\/") }| ?{ $_ })
-    $Path += @($Append -split "$Separator" | %{ $_.TrimEnd("\/") }| ?{ $_ })
+    $Path = @($Prepend -split "$Separator" | ForEach-Object{ $_.TrimEnd("\/") } | Where-Object { $_ })
+    $Path += $OldPath = @([Environment]::GetEnvironmentVariable($Name, $Scope) -split "$Separator" | ForEach-Object { $_.TrimEnd("\/") }| Where-Object { $_ })
+    $Path += @($Append -split "$Separator" | ForEach-Object { $_.TrimEnd("\/") }| Where-Object { $_ })
 
     # Dedup path
     # If the path actually exists, use the actual case of the folder
     $Path = $(foreach($Folder in $Path) {
                 if(Test-Path $Folder) {
-                    Get-Item ($Folder -replace '(?<!:)(\\|/)', '*$1') | Where FullName -ieq $Folder | % FullName
+                    Get-Item ($Folder -replace '(?<!:)(\\|/)', '*$1') | Where-Object FullName -ieq $Folder | ForEach-Object FullName
                 } else { $Folder }
-            } ) | Select -Unique
+            } ) | Select-Object -Unique
 
     # Turn them back into strings
     $Path = $Path -join "$Separator"
@@ -157,7 +158,7 @@ function Add-Path {
     # Path environment variables are kind-of a pain:
     # The current value in the process scope is a combination of machine and user, with changes
     # We need to fix the CURRENT path instead of just setting it
-    $OldEnvPath = @($(Get-Content "ENV:$Name") -split "$Separator" | %{ $_.TrimEnd("\/") }) -join "$Separator"
+    $OldEnvPath = @($(Get-Content "ENV:$Name") -split "$Separator" | ForEach-Object { $_.TrimEnd("\/") }) -join "$Separator"
     if("$OldPath".Trim().Length -gt 0) {
         Write-Verbose "Old $Name Path: $OldEnvPath"
         $OldEnvPath = $OldEnvPath -Replace ([regex]::escape($OldPath)), $Path
@@ -212,8 +213,8 @@ function Select-UniquePath {
             if ($Delimiter) { 
                 $folderPath = $folderPath -split $Delimiter
             }
-            $folderPath = $folderPath | Foreach {$_.TrimEnd('\/')} | Sort-Object | Select-Object -Unique
-            $folderPath | Foreach {
+            $folderPath = $folderPath | ForEach-Object {$_.TrimEnd('\/')} | Sort-Object | Select-Object -Unique
+            $folderPath | ForEach-Object {
                 if (Test-Path $_) {
                     $Output += Get-Item $_ 
                     Write-Verbose "Unique path added:: $($_)" 
@@ -226,9 +227,9 @@ function Select-UniquePath {
     }
     end {
         if($Delimiter) {
-            ($Output | Select -Expand FullName -Unique) -join $Delimiter
+            ($Output | Select-Object -Expand FullName -Unique) -join $Delimiter
         } else {
-            $Output | Select -Expand FullName -Unique
+            $Output | Select-Object -Expand FullName -Unique
         }
     }
 }
@@ -238,13 +239,9 @@ function Trace-Message {
     param(
         [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [string]$Message,
-
         [switch]$AsWarning,
-
         [switch]$ResetTimer,
-
         [switch]$KillTimer,
-
         [Diagnostics.Stopwatch]$Stopwatch
     )
     begin {
@@ -257,8 +254,7 @@ function Trace-Message {
             $Script:TraceTimer.Start()
         }
 
-        if($ResetTimer) 
-        {
+        if($ResetTimer) {
             $Script:TraceTimer.Restart()
         }
     }
@@ -289,7 +285,7 @@ function Set-AliasToFirst {
         [switch]$Horse,
         [switch]$Passthru
     )
-    if($App = Resolve-Path $Path -EA Ignore | Sort LastWriteTime -Desc | Select-Object -First 1 -Expand Path) {
+    if($App = Resolve-Path $Path -EA Ignore | Sort-Object LastWriteTime -Desc | Select-Object -First 1 -Expand Path) {
         foreach($a in $Alias) {
             Set-Alias $a $App -Scope Global -Option Constant, ReadOnly, AllScope -Description $Description -Horse:$Horse
         }
@@ -303,14 +299,14 @@ function Set-AliasToFirst {
 
 function Write-SessionBanner {
     try {
-        $IPAddress = @(Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object {$_.DefaultIpGateway})[0].IPAddress[0]
+        $IPAddress = @(Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object {$_.DefaultIpGateway})[0].IPAddress[0]
     }
     catch {
         $IPAddress = '               '
     }
     if ($IPAddress.Length -lt 15) {$IPAddress += (' ' * (15-$IPAddress.length))}
     try {
-        $IPGateway=@(Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object {$_.DefaultIpGateway})[0].DefaultIPGateway[0]
+        $IPGateway=@(Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object {$_.DefaultIpGateway})[0].DefaultIPGateway[0]
     }
     catch {
         $IPGateway = '               '
@@ -321,38 +317,38 @@ function Write-SessionBanner {
 
     # Line 1
     Write-Host "Domain:   " -nonewline -ForegroundColor Green
-        Write-Host $env:UserDomain"`t`t" -nonewline -ForegroundColor Cyan
+    Write-Host $env:UserDomain"`t`t" -nonewline -ForegroundColor Cyan
     Write-Host "Logon Server: " -nonewline -ForegroundColor Green
-        Write-Host $($env:LOGONSERVER -replace '\\')"`t" -nonewline -ForegroundColor Cyan
+    Write-Host $($env:LOGONSERVER -replace '\\')"`t" -nonewline -ForegroundColor Cyan
     Write-Host "IP: " -nonewline -ForegroundColor Green
-        Write-Host $IPAddress"`t" -nonewline -ForegroundColor Cyan
+    Write-Host $IPAddress"`t" -nonewline -ForegroundColor Cyan
     Write-Host "Execution Policy: " -nonewline -ForegroundColor Green
-        Write-Host $($PSExecPolicy) -ForegroundColor Cyan
+    Write-Host $($PSExecPolicy) -ForegroundColor Cyan
 
     # Line 2
     Write-Host "Computer: " -nonewline -ForegroundColor Green
-        Write-Host $($env:COMPUTERNAME)"`t" -nonewline -ForegroundColor Cyan
+    Write-Host $($env:COMPUTERNAME)"`t" -nonewline -ForegroundColor Cyan
     Write-Host "Current User: " -nonewline -ForegroundColor Green
-        Write-Host $env:UserName"`t`t" -nonewline -ForegroundColor Cyan
+    Write-Host $env:UserName"`t`t" -nonewline -ForegroundColor Cyan
     Write-Host "GW: " -nonewline -ForegroundColor Green
-        Write-Host $IPGateway"`t" -nonewline -ForegroundColor Cyan
+    Write-Host $IPGateway"`t" -nonewline -ForegroundColor Cyan
     Write-Host "PS Version: " -nonewline -ForegroundColor Green
-        Write-Host $PSVersion -ForegroundColor Cyan
+    Write-Host $PSVersion -ForegroundColor Cyan
 
     # Line 3    
     Write-Host "Uptime (hardware boot): " -nonewline -ForegroundColor Green
-        Write-Host "$(Get-Uptime)" -ForegroundColor Cyan
+    Write-Host "$(Get-Uptime)" -ForegroundColor Cyan
 
     # Line 4
     $FromSleep = Get-Uptime -FromSleep
     if ($FromSleep) {
         Write-Host "Uptime (system resume): " -nonewline -ForegroundColor Green
-            Write-Host "$($FromSleep)" -ForegroundColor Cyan
+        Write-Host "$($FromSleep)" -ForegroundColor Cyan
     }
 }
 
 function Reset-Module ($ModuleName) {
-    rmo $ModuleName; ipmo $ModuleName -horse -pass | ft Name, Version, Path -AutoSize
+    Remove-Module $ModuleName; Import-Module $ModuleName -Force -PassThru | Format-Table Name, Version, Path -AutoSize
 }
 
 function Get-Uptime {
@@ -361,7 +357,7 @@ function Get-Uptime {
     )
     try {
         if (-not $FromSleep) {
-            $os = Get-WmiObject win32_operatingsystem
+            $os = Get-CimInstance win32_operatingsystem
             $uptime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
         }
         else {
@@ -371,15 +367,14 @@ function Get-Uptime {
 
         Write-Output $Display
     }
-    catch {}
+    catch {Write-Error -Message 'An error occured.'}
 }
 
 function qq {
     param(
         [Parameter(ValueFromRemainingArguments=$true)]
         [string[]]$q
-    )
-    
+    )  
     $q
 }
 
@@ -505,7 +500,7 @@ function Set-Prompt {
              if($err) { $fg = $global:ErrorForeground } else { $fg = $global:PromptForeground }
              # Notice: no angle brackets, makes it easy to paste my buffer to the web
              Write-Host "[${Nesting}$($myinvocation.historyID)${Stack}]" -NoNewLine -Foreground $fg
-             Write-host " #>" -NoNewLine -fore gray
+             Write-host "`n#>"  -fore gray
              # Hack PowerShell ISE CTP2 (requires 4 characters of output)
              if($Host.Name -match "ISE" -and $PSVersionTable.BuildVersion -eq "6.2.8158.0") {
                 return "$("$([char]8288)"*3) " 
@@ -601,7 +596,7 @@ function fuck {
     if($fuck.startswith("echo")) {
         $fuck.substring(5)
     }
-    else { iex "$fuck" }
+    else { $fuck }
 }
 function cpanel {Start-Process "explorer.exe" -ArgumentList "shell:::{ED7BA470-8E54-465E-825C-99712043E01C}" }
 function get-java {
@@ -609,12 +604,12 @@ function get-java {
         [switch]$download
     )
     if ($download) {
-        $page = iwr http://java.com/en/download/windows_offline.jsp
-        $version = $page.RawContent -split "`n" | ? {$_ -match 'recommend'} | select -f 1 | % {$_ -replace '^[^v]+| \(.*$'}
-        $link = $page.links.href | ? {$_ -match '^http.*download'} | select -f 1
-        iwr $link -outfile "c:\tools\Java $version.exe"
+        $page = Invoke-WebRequest -Uri "http://java.com/en/download/windows_offline.jsp"
+        $version = $page.RawContent -split "`n" | Where-Object {$_ -match 'recommend'} | Select-Object -first 1 | ForEach-Object {$_ -replace '^[^v]+| \(.*$'}
+        $link = $page.links.href | Where-Object {$_ -match '^http.*download'} | Select-Object -first 1
+        Invoke-WebRequest $link -outfile "c:\tools\Java $version.exe"
     } else {
-        ($(iwr http://java.com/en/download).Content.Split("`n") | ? {$_ -match 'version'})[0]
+        ($(Invoke-WebRequest -Uri "http://java.com/en/download").Content.Split("`n") | Where-Object {$_ -match 'version'})[0]
     }
 }
 if (!(Get-Module -ListAvailable | Where-Object {$_.Name -eq "Connect-Mstsc"})) {

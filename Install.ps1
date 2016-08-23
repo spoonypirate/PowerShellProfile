@@ -43,6 +43,8 @@ if (Test-Path $PROFILE) {
 }
 
 Copy-Item "$($SourcePath)\Microsoft.PowerShell_profile.ps1" -Destination $InstallPath
+#find where cmder installs on initial install from boxstarter
+#Copy-Item "$($SourcePath)\ConEmu.xml" -Destination ""
 
 if (Test-Path "$($InstallPath)\Scripts") {
     Write-Host -ForegroundColor Red  "$($InstallPath)\Scripts already exists! Be VERY careful before selecting to overwrite items within it at the next prompt!"
@@ -50,15 +52,9 @@ if (Test-Path "$($InstallPath)\Scripts") {
 Copy-Item "$($SourcePath)\Scripts" -Destination "$($InstallPath)" -Recurse
 
 if (Test-Path "$($InstallPath)\Modules") {
-    Write-Warning "$($InstallPath)\Modules already exists! Be VERY careful before selecting to overwrite items within it at the next prompt!!!"
+    Write-Warning "$($InstallPath)\Modules already exists! Be VERY careful before selecting to overwrite items within it at the next prompt!"
 }
 Copy-Item -Path "$($SourcePath)\Modules" -Destination "$($InstallPath)\Modules" -Recurse
-
-
-
-. (Split-Path $Profile)\Scripts\New-CodeSigningCertificate.ps1
-. (Split-Path $Profile)\Scripts\Set-ProfileScriptSignature.ps1
-Set-ExecutionPolicy AllSigned
 
 Write-Host ''
 Write-Host "Your new Powershell profile has been installed." -ForegroundColor Green
