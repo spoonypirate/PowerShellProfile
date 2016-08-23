@@ -13,11 +13,11 @@ Describe 'Add-Path' {
     Context 'SinglePath' {
         It 'prepends correctly' {
             Add-Path -Name userenv -Prepend "C:\prepended"
-            ((Get-Item Env:\userenv).Value -split ';')[0] | Should Be "C:\prepended"
+            ((Get-Item Env:\userenv).Value -split ';')[0] | Should Match "C:\prepended"
         }
         It 'appends correctly' {
             Add-Path -Name userenv -Append "C:\appended"
-            ((Get-Item Env:\userenv).Value -split ';')[-1] | Should Be "C:\appended"
+            ((Get-Item Env:\userenv).Value -split ';')[-1] | Should Match "C:\appended"
         }
     }
     Context 'NoPath' {
