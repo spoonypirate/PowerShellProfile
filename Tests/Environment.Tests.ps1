@@ -22,6 +22,7 @@ Describe 'Add-Path' {
             $a = "C:\appended"
             Add-Path -Name userenv -Append $a
             refreshenv
+            $env:userenv
             $b = ((Get-Item Env:\userenv).Value -split ';')[-1] 
             (Compare-Object $a $b).InputObject| Should BeNullorEmpty
         }
@@ -31,6 +32,7 @@ Describe 'Add-Path' {
             $a = ((Get-Item Env:userenv).Value -split ';')
             Add-Path -Name userenv
             refreshenv
+            $env:userenv
             $b = ((Get-Item Env:userenv).Value -split ';')
             (Compare-Object -ReferenceObject $a -DifferenceObject $b).InputObject | Should beNullOrEmpty
         }
@@ -40,6 +42,7 @@ Describe 'Add-Path' {
            $a = @("C:\path1","C:\path2")
            Add-Path -Name userenv -Append $a
            refreshenv
+           $env:userenv
            $b = ((Get-Item Env:userenv).Value -split ';')[-2,-1]
            (Compare-Object $b $a).InputObject | Should BeNullOrEmpty
        }
