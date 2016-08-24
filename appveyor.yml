@@ -225,7 +225,7 @@ test:
 # scripts to run before tests
 #before_test:
 #  - echo script1
-  - ps: Write-Host "script1"
+#  - ps: Write-Host "script1"
 
 # scripts to run after tests
 #after_test:
