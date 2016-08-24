@@ -132,7 +132,7 @@ function Add-Path {
         [String[]]$Prepend = @(),
 
         [System.EnvironmentVariableTarget]
-        $Scope="User",
+        $Scope="Machine",
 
         [Char]
         $Separator = [System.IO.Path]::PathSeparator

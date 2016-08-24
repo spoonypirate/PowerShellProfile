@@ -12,12 +12,16 @@ Describe 'Set-EnvironmentVariable' {
 Describe 'Add-Path' {
     Context 'SinglePath' {
         It 'prepends correctly' {
-            Add-Path -Name userenv -Prepend "C:\prepended"
-            ((Get-Item Env:\userenv).Value -split ';')[0] | Should Match "C:\prepended"
+            $a = "C:\prepended"
+            Add-Path -Name userenv -Prepend $a
+            $b = ((Get-Item Env:\userenv).Value -split ';')[0]
+            (Compare-Object $a $b).InputObject | Should BeNullOrEmpty
         }
         It 'appends correctly' {
-            Add-Path -Name userenv -Append "C:\appended"
-            ((Get-Item Env:\userenv).Value -split ';')[-1] | Should Match "C:\appended"
+            $a = "C:\appended"
+            Add-Path -Name userenv -Append $a
+            $b = ((Get-Item Env:\userenv).Value -split ';')[-1] 
+            (Compare-Object $a $b).InputObject| Should BeNullorEmpty
         }
     }
     Context 'NoPath' {
@@ -30,7 +34,10 @@ Describe 'Add-Path' {
     }
     Context 'PathArray' {
        it 'works with arrays' {
-
+           $a = @("C:\path1","C:\path2")
+           Add-Path -Name userenv -Append $a
+           $b = ((Get-Item Env:userenv).Value -split ';')[-2,-1]
+           (Compare-Object $b $a).InputObject | Should BeNullOrEmpty
        }
     }
 }
