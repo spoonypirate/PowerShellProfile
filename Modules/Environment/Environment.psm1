@@ -31,7 +31,14 @@ function Get-SpecialFolder {
   [CmdletBinding()]
   param(
     # The name of the Path you want to fetch (supports wildcards).
-    #  From the list: AdminTools, ApplicationData, CDBurning, CommonAdminTools, CommonApplicationData, CommonDesktopDirectory, CommonDocuments, CommonMusic, CommonOemLinks, CommonPictures, CommonProgramFiles, CommonProgramFilesX86, CommonPrograms, CommonStartMenu, CommonStartup, CommonTemplates, CommonVideos, Cookies, Desktop, DesktopDirectory, Favorites, Fonts, History, InternetCache, LocalApplicationData, LocalizedResources, MyComputer, MyDocuments, MyMusic, MyPictures, MyVideos, NetworkShortcuts, Personal, PrinterShortcuts, ProgramFiles, ProgramFilesX86, Programs, PSHome, Recent, Resources, SendTo, StartMenu, Startup, System, SystemX86, Templates, UserProfile, Windows
+    #  From the list:   AdminTools, ApplicationData, CDBurning, CommonAdminTools, CommonApplicationData, 
+    #                   CommonDesktopDirectory, CommonDocuments, CommonMusic, CommonOemLinks, CommonPictures, 
+    #                   CommonProgramFiles, CommonProgramFilesX86, CommonPrograms, CommonStartMenu, CommonStartup, 
+    #                   CommonTemplates, CommonVideos, Cookies, Desktop, DesktopDirectory, Favorites, Fonts, 
+    #                   History, InternetCache, LocalApplicationData, LocalizedResources, MyComputer, MyDocuments, 
+    #                   MyMusic, MyPictures, MyVideos, NetworkShortcuts, Personal, PrinterShortcuts, ProgramFiles, 
+    #                   ProgramFilesX86, Programs, PSHome, Recent, Resources, SendTo, StartMenu, Startup, System, 
+    #                   SystemX86, Templates, UserProfile, Windows
     [ValidateScript({
         $Name = $_
         if(!$Script:SpecialFolders.Count -gt 0) { LoadSpecialFolders }
@@ -282,12 +289,12 @@ function Set-AliasToFirst {
         [string[]]$Alias,
         [string[]]$Path,
         [string]$Description = "the app in $($Path[0])...",
-        [switch]$Horse,
+        [switch]$Force,
         [switch]$Passthru
     )
     if($App = Resolve-Path $Path -EA Ignore | Sort-Object LastWriteTime -Desc | Select-Object -First 1 -Expand Path) {
         foreach($a in $Alias) {
-            Set-Alias $a $App -Scope Global -Option Constant, ReadOnly, AllScope -Description $Description -Horse:$Horse
+            Set-Alias $a $App -Scope Global -Option Constant, ReadOnly, AllScope -Description $Description -Force:$Force
         }
         if($Passthru) {
             Split-Path $App
@@ -296,96 +303,30 @@ function Set-AliasToFirst {
         Write-Warning "Could not find $Description"
     }
 }
-
-function Write-SessionBanner {
-    try {
-        $IPAddress = @(Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object {$_.DefaultIpGateway})[0].IPAddress[0]
-    }
-    catch {
-        $IPAddress = '               '
-    }
-    if ($IPAddress.Length -lt 15) {$IPAddress += (' ' * (15-$IPAddress.length))}
-    try {
-        $IPGateway=@(Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object {$_.DefaultIpGateway})[0].DefaultIPGateway[0]
-    }
-    catch {
-        $IPGateway = '               '
-    }
-    if ($IPGateway.Length -lt 15) {$IPGateway += (' ' * (15-$IPGateway.length))}
-    $PSExecPolicy=Get-ExecutionPolicy
-    $PSVersion=$PSVersionTable.PSVersion.Major
-
-    # Line 1
-    Write-Host "Domain:   " -nonewline -ForegroundColor Green
-    Write-Host $env:UserDomain"`t`t" -nonewline -ForegroundColor Cyan
-    Write-Host "Logon Server: " -nonewline -ForegroundColor Green
-    Write-Host $($env:LOGONSERVER -replace '\\')"`t" -nonewline -ForegroundColor Cyan
-    Write-Host "IP: " -nonewline -ForegroundColor Green
-    Write-Host $IPAddress"`t" -nonewline -ForegroundColor Cyan
-    Write-Host "Execution Policy: " -nonewline -ForegroundColor Green
-    Write-Host $($PSExecPolicy) -ForegroundColor Cyan
-
-    # Line 2
-    Write-Host "Computer: " -nonewline -ForegroundColor Green
-    Write-Host $($env:COMPUTERNAME)"`t" -nonewline -ForegroundColor Cyan
-    Write-Host "Current User: " -nonewline -ForegroundColor Green
-    Write-Host $env:UserName"`t`t" -nonewline -ForegroundColor Cyan
-    Write-Host "GW: " -nonewline -ForegroundColor Green
-    Write-Host $IPGateway"`t" -nonewline -ForegroundColor Cyan
-    Write-Host "PS Version: " -nonewline -ForegroundColor Green
-    Write-Host $PSVersion -ForegroundColor Cyan
-
-    # Line 3    
-    Write-Host "Uptime (hardware boot): " -nonewline -ForegroundColor Green
-    Write-Host "$(Get-Uptime)" -ForegroundColor Cyan
-
-    # Line 4
-    $FromSleep = Get-Uptime -FromSleep
-    if ($FromSleep) {
-        Write-Host "Uptime (system resume): " -nonewline -ForegroundColor Green
-        Write-Host "$($FromSleep)" -ForegroundColor Cyan
-    }
-}
-
 function Reset-Module ($ModuleName) {
     Remove-Module $ModuleName; Import-Module $ModuleName -Force -PassThru | Format-Table Name, Version, Path -AutoSize
 }
 
 function Get-Uptime {
-    param(
-        [switch]$FromSleep
-    )
+    param([switch]$FromSleep)
     try {
         if (-not $FromSleep) {
             $os = Get-CimInstance win32_operatingsystem
-            $uptime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
+            $uptime = (Get-Date) - ($os.lastbootuptime).ToDateTime($_)
         }
         else {
             $Uptime = (((Get-Date)- (Get-EventLog -LogName system -Source 'Microsoft-Windows-Power-Troubleshooter' -Newest 1).TimeGenerated))
         }
-        $Display = "" + $Uptime.Days + " days / " + $Uptime.Hours + " hours / " + $Uptime.Minutes + " minutes"
+        $Display = "" + $Uptime.Days + " days,  " + $Uptime.Hours + " hours, " + $Uptime.Minutes + " minutes"
 
         Write-Output $Display
     }
     catch {Write-Error -Message 'An error occured.'}
 }
 
-function qq {
-    param(
-        [Parameter(ValueFromRemainingArguments=$true)]
-        [string[]]$q
-    )  
-    $q
-}
 
-function fuck {
-    $fuck = $(thefuck (get-history -count 1).commandline)
-    if($fuck.startswith("echo")) {
-        $fuck.substring(5)
-    }
-    else { $fuck }
-}
-function cpanel {Start-Process "explorer.exe" -ArgumentList "shell:::{ED7BA470-8E54-465E-825C-99712043E01C}" }
+function cpanel { Start-Process "explorer.exe" -ArgumentList "shell:::{ED7BA470-8E54-465E-825C-99712043E01C}" }
+
 function get-java {
     param(
         [switch]$download
@@ -403,20 +344,21 @@ if (!(Get-Module -ListAvailable | Where-Object {$_.Name -eq "Connect-Mstsc"})) {
     Write-Output 'Connect-Mstsc module not found.'
     Write-Output "'rdp' function will not work. Please make sure the module is present."
     } else {
-    function rdp {
-        Param([Parameter(Mandatory=$true)] $servername)
-        switch ($servername)    {
-            127.0.0.1 { write-output "no no no!" }
-            localhost { Write-Output "NO"}
-            default {
-                $user = "$env:userdomain\$env:username"
-                $securestringpath = "C:\tools\pwd.txt"
-                $pass = Get-Content $securestringpath | ConvertTo-SecureString
-                $cred = New-Object System.Management.Automation.PSCredential $user,$pass
-                Connect-Mstsc $servername $user $cred.GetNetworkCredential().password
+        #rdp quick~!
+        Function rdp {
+            Param([Parameter(Mandatory=$true)] $servername)
+            switch ($servername) {
+                127.0.0.1 { write-output "no no no!" }
+                localhost { Write-Output "NO"}
+                default { 
+                    if (Get-Module BetterCredentials) {
+                        Connect-Mstsc $servername (BetterCredentials\Get-Credential "$env:USERDOMAIN\$env:username") 
+                    } else {
+                        Connect-Mstsc $servername (Get-Credential "$env:USERDOMAIN\$env:username")
+                    }
                 }
             }
         }
     }
 
-    
+function cpanel { Start-Process "explorer.exe" -ArgumentList "shell:::{ED7BA470-8E54-465E-825C-99712043E01C}" }
